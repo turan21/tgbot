@@ -1,6 +1,7 @@
 import telebot
 import sqliter
 from telebot import types
+import voice
 
 bot = telebot.TeleBot("1079116810:AAFKRqfx1XQhj6wG5jDifUUiHWsjtNpEpA4")
 
@@ -53,7 +54,9 @@ name = ''
 surname = ''
 age = 0
 
-
+@bot.message_handler(commands=['help'])
+def help(message):
+    bot.send_message(message.chat.id,'/login - login\n /login - login\n /login - login\n /login - login\n /login - login\n ')
 @bot.message_handler(commands=['start'])
 def welcome(message):
     bot.send_message(message.chat.id,
@@ -61,6 +64,8 @@ def welcome(message):
                          message.from_user, bot.get_me()),
                      parse_mode='html', reply_markup=None)
     print(message.from_user)
+    bot.send_message(message.chat.id,'/login - login\n /login - login\n /login - login\n /login - login\n /login - login\n ')
+
 @bot.message_handler(commands=['login'])
 def login(message):
     markup = types.InlineKeyboardMarkup(row_width=2)
@@ -109,6 +114,7 @@ def callback_inline(call):
 @bot.message_handler(content_types=['text'])
 def get_age(message):
     global age
+    print(type(message.text))
     while age == 0:  # проверяем что возраст изменился
         try:
             age = int(message.text)  # проверяем, что возраст введен корректно
