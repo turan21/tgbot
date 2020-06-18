@@ -1,11 +1,12 @@
 import sqlite3
-import time, telepot
-import os, shutil
+import time
+import telepot
+import shutil
 import sqliter
 from pathlib import Path
 from telepot.namedtuple import InlineKeyboardButton, InlineKeyboardMarkup
 from telepot.loop import MessageLoop
-from telepot.delegate import per_chat_id, create_open, pave_event_space, per_callback_query_chat_id, \
+from telepot.delegate import per_chat_id, create_open, pave_event_space, \
     include_callback_query_chat_id
 
 
@@ -29,14 +30,13 @@ def get_count(username):
     cur.execute(f"""SELECT count from users
 WHERE username = {username}""")
     count = cur.fetchone()[0]
-    print(count)
-    return count
+    Foo.count[f'{username}'] = count
 
 
 def update_count(count, username):
     db = sqlite3.connect('users.db')
     cur = db.cursor()
-    cur.execute("SELECT username FROM users")
+    cur.execute("SELECT * FROM users")
     cur.execute(f"""UPDATE users
 SET count = {count}
 WHERE username = {username};""")
@@ -44,10 +44,10 @@ WHERE username = {username};""")
 
 
 class Foo(object):
-    CONST_NAME = {"username": 0}
+    CONST_NAME = {}
     USER_INFO = []
-    gender = {"username": 0}
-    count = {"username": 0}
+    gender = {}
+    count = {}
 
 
 age_list = [1, 2, 3, 4, 5, 6]
@@ -61,6 +61,7 @@ class Voice(telepot.helper.ChatHandler):
 
     def on_chat_message(self, msg):
         content_type, chat_type, chat_id, msg_date, msg_id = telepot.glance(msg, flavor='chat', long=True)
+        get_count(msg["from"]["id"])
         if content_type == 'voice':
             keyboard = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="Подтвердить", callback_data='yes'),
@@ -74,7 +75,8 @@ class Voice(telepot.helper.ChatHandler):
             Foo.CONST_NAME[msg['from']['id']] = msg
             if msg['text'] == '/start':
                 Foo.count[str(msg['from']['id'])] = 0
-                update_count(0, int(msg['from']['id']))
+                update_count(Foo.count[str(msg['from']['id'])], msg['from']['id'])
+                # update_count(0, int(msg['from']['id']))
                 Path(f'/home/pc/PycharmProjects/tgbot/files/{msg["from"]["id"]}').mkdir(parents=True, exist_ok=True)
                 bot.sendMessage(chat_id,
                                 'Доброго времени суток! ' + msg['from']['first_name'] + '\n Зарегистрируйтесь /reg')
@@ -85,22 +87,21 @@ class Voice(telepot.helper.ChatHandler):
                 ]
                 )
                 bot.sendMessage(chat_id, "Выберите ваш пол", reply_markup=markup)
-
-
-            elif msg['text'] == '/my':
-                bot.sendMessage(chat_id, msg['from']['first_name'])
+            elif msg['text'] == '/next':
                 if Foo.count[str(msg['from']['id'])] < len(sqliter.Words.WORDS_LIST) - 1:
-
                     Foo.count[str(msg['from']['id'])] += 1
-                    update_count(int(Foo.count[str(msg['from']['id'])]), int(msg['from']['id']))
+                    update_count(Foo.count[str(msg['from']['id'])], str(msg['from']['id']))
+                    bot.sendMessage(chat_id,
+                                    str(sqliter.Words.WORDS_LIST[Foo.count[str(msg['from']['id'])]]).strip("()'',"))
                 else:
-                    bot.sendMessage(chat_id, "Wait for texts!\n try again later")
-                    print(Foo.count)
+                    bot.sendMessage(chat_id, "Подождите пока загрузим новые слова!\n try again later")
             elif msg['text'] == '/help':
-                bot.sendMessage(chat_id, "registration - /reg\n my name - /my\n help - /help")
+                bot.sendMessage(chat_id, "Регистрация - /reg\n Начать упражнения - /exercise \n Инструкция - /help")
+            elif msg['text'] == '/exercise':
+                text = str(sqliter.Words.WORDS_LIST[Foo.count[str(msg['from']['id'])]]).strip("()'',")
+                bot.sendMessage(chat_id, text)
             else:
-                bot.sendMessage(chat_id,
-                                str(sqliter.Words.WORDS_LIST[get_count(msg["from"]["id"])]).strip("()'',"))
+                bot.sendMessage(chat_id, "Регистрация - /reg\n Начать упражнения - /exercise \n Инструкция - /help")
 
     def on_callback_query(self, msg):
         query_id, from_id, query_data = telepot.glance(msg, flavor='callback_query')
@@ -112,14 +113,11 @@ class Voice(telepot.helper.ChatHandler):
             if duration > 30:
                 bot.sendMessage(chat_id, ">30 секунд")
                 return
-
             file_name = Foo.CONST_NAME[msg['from']['id']]['voice']['file_id']
             bot.download_file(Foo.CONST_NAME[msg['from']['id']]['voice']['file_id'], "{0}.ogg".format(file_name))
             my_file = Path("./{0}.ogg".format(Foo.CONST_NAME[msg['from']['id']]['voice']['file_id']))
-
             while not my_file.is_file():
                 time.sleep(2)
-
             start_time = time.time()
             elapsed_time = time.time() - start_time
             print("Time Elapsed: ", elapsed_time)
@@ -131,28 +129,14 @@ class Voice(telepot.helper.ChatHandler):
             Foo.gender[msg['from']['id']] = 0
             markup = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="6-12", callback_data=1),
-                 InlineKeyboardButton(text="12-18", callback_data=2)],
-                [InlineKeyboardButton(text="18-24", callback_data=3),
-                 InlineKeyboardButton(text="24-30", callback_data=4)],
-                [InlineKeyboardButton(text="30-40", callback_data=5),
-                 InlineKeyboardButton(text="40-50", callback_data=6)]
-            ]
-            )
+                 InlineKeyboardButton(text="12-18", callback_data=2)], ])
             bot.editMessageText((msg['from']['id'], msg['message']['message_id']), "Сколько вам лет?",
                                 reply_markup=markup)
-
         elif query_data == 'female':
             Foo.gender[msg['from']['id']] = 1
             markup = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="6-12", callback_data=1),
-                 InlineKeyboardButton(text="12-18", callback_data=2)],
-                [InlineKeyboardButton(text="18-24", callback_data=3),
-                 InlineKeyboardButton(text="24-30", callback_data=4)],
-                [InlineKeyboardButton(text="30-40", callback_data=5),
-                 InlineKeyboardButton(text="40-50", callback_data=6)]
-
-            ]
-            )
+                 InlineKeyboardButton(text="12-18", callback_data=2)], ])
             bot.editMessageText((msg['from']['id'], msg['message']['message_id']), "Сколько вам лет?",
                                 reply_markup=markup)
         elif int(query_data) in age_list:
@@ -161,14 +145,6 @@ class Voice(telepot.helper.ChatHandler):
                      query_data, Foo.gender[msg['from']['id']],
                      Foo.CONST_NAME[msg['from']['id']]['from']['first_name'])
             bot.editMessageText((msg['from']['id'], msg['message']['message_id']), "Регистрация прошла успешно")
-        #     markup = InlineKeyboardMarkup(inline_keyboard=[
-        #         [InlineKeyboardButton(text=" ▶️", callback_data='next')],
-        #     ]
-        #     )
-        #     bot.sendMessage(chat_id,"Нашмите на кнопку чтобы начать",reply_markup=markup)
-        # elif query_data == 'next':
-        #     bot.sendMessage(chat_id,"...")
-
 
 bot = telepot.DelegatorBot("1079116810:AAFKRqfx1XQhj6wG5jDifUUiHWsjtNpEpA4", [
     include_callback_query_chat_id(
