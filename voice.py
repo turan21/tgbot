@@ -17,9 +17,9 @@ def write_db(username, file_path, age, gender, first_name):
     cur.execute(
         """CREATE TABLE IF NOT EXISTS users (user_id INTEGER NOT NULL PRIMARY KEY, username INTEGER NOT NULL UNIQUE,file_path TEXT, age INTEGER, gender INTEGER, first_name TEXT,count INTEGER)""")
     db.commit()
-    data_person_name = [(username, file_path, age, gender, first_name), ]
+    data_person_name = [(username, file_path, age, gender, first_name, 0), ]
     cur.execute("SELECT user_id FROM users")
-    cur.executemany('INSERT OR IGNORE INTO users(username, file_path, age, gender, first_name) VALUES (?,?,?,?,?)',
+    cur.executemany('INSERT OR IGNORE INTO users(username, file_path, age, gender, first_name, count) VALUES (?,?,?,?,?,?)',
                     data_person_name)
     db.commit()
 
@@ -61,7 +61,11 @@ class Voice(telepot.helper.ChatHandler):
 
     def on_chat_message(self, msg):
         content_type, chat_type, chat_id, msg_date, msg_id = telepot.glance(msg, flavor='chat', long=True)
-        get_count(msg["from"]["id"])
+        try:
+            get_count(msg["from"]["id"])
+        except Exception as e:
+            Foo.count[msg["from"]["id"]]=0
+            print(repr(e))
         if content_type == 'voice':
             keyboard = InlineKeyboardMarkup(inline_keyboard=[
                 [InlineKeyboardButton(text="Подтвердить", callback_data='yes'),
@@ -87,14 +91,6 @@ class Voice(telepot.helper.ChatHandler):
                 ]
                 )
                 bot.sendMessage(chat_id, "Выберите ваш пол", reply_markup=markup)
-            elif msg['text'] == '/next':
-                if Foo.count[str(msg['from']['id'])] < len(sqliter.Words.WORDS_LIST) - 1:
-                    Foo.count[str(msg['from']['id'])] += 1
-                    update_count(Foo.count[str(msg['from']['id'])], str(msg['from']['id']))
-                    bot.sendMessage(chat_id,
-                                    str(sqliter.Words.WORDS_LIST[Foo.count[str(msg['from']['id'])]]).strip("()'',"))
-                else:
-                    bot.sendMessage(chat_id, "Подождите пока загрузим новые слова!\n try again later")
             elif msg['text'] == '/help':
                 bot.sendMessage(chat_id, "Регистрация - /reg\n Начать упражнения - /exercise \n Инструкция - /help")
             elif msg['text'] == '/exercise':
@@ -108,7 +104,11 @@ class Voice(telepot.helper.ChatHandler):
         content_type, chat_type, chat_id, msg_date, msg_id = telepot.glance(Foo.CONST_NAME[msg['from']['id']],
                                                                             flavor='chat', long=True)
         if query_data == 'yes':
-            bot.editMessageText((msg['from']['id'], msg['message']['message_id']), "Отправлено")
+            markup = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="Next text", callback_data='next'), ]
+            ]
+            )
+            bot.editMessageText((msg['from']['id'], msg['message']['message_id']), "Отправлено",reply_markup=markup)
             duration = Foo.CONST_NAME[msg['from']['id']]['voice']['duration']
             if duration > 30:
                 bot.sendMessage(chat_id, ">30 секунд")
@@ -135,16 +135,24 @@ class Voice(telepot.helper.ChatHandler):
         elif query_data == 'female':
             Foo.gender[msg['from']['id']] = 1
             markup = InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="6-12", callback_data=1),
-                 InlineKeyboardButton(text="12-18", callback_data=2)], ])
+                [InlineKeyboardButton(text="12-20", callback_data=1),
+                 InlineKeyboardButton(text="20-35", callback_data=2)], ])
             bot.editMessageText((msg['from']['id'], msg['message']['message_id']), "Сколько вам лет?",
                                 reply_markup=markup)
+        elif query_data == 'next':
+            if Foo.count[str(msg['from']['id'])] < len(sqliter.Words.WORDS_LIST) - 1:
+                Foo.count[str(msg['from']['id'])] += 1
+                update_count(Foo.count[str(msg['from']['id'])], str(msg['from']['id']))
+                bot.editMessageText((msg['from']['id'], msg['message']['message_id']), str(sqliter.Words.WORDS_LIST[Foo.count[str(msg['from']['id'])]]).strip("()'',"))
+            else:
+                bot.sendMessage(chat_id, "Подождите пока загрузим новые слова!\n Потом снова нашмите на кнопку")
+
         elif int(query_data) in age_list:
             write_db(Foo.CONST_NAME[msg['from']['id']]['from']['id'],
                      f'/home/pc/PycharmProjects/tgbot/files/{Foo.CONST_NAME[msg["from"]["id"]]["from"]["id"]}',
                      query_data, Foo.gender[msg['from']['id']],
                      Foo.CONST_NAME[msg['from']['id']]['from']['first_name'])
-            bot.editMessageText((msg['from']['id'], msg['message']['message_id']), "Регистрация прошла успешно")
+            bot.editMessageText((msg['from']['id'], msg['message']['message_id']), "Регистрация прошла успешно \n Нажмите на слэш '/' и выберите exercise чтобы начать упражнения \n После того как выйдет текст запишите аудио")
 
 bot = telepot.DelegatorBot("1079116810:AAFKRqfx1XQhj6wG5jDifUUiHWsjtNpEpA4", [
     include_callback_query_chat_id(
